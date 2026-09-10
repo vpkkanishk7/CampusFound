@@ -1,9 +1,19 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, ArrowRight, MapPin, ShieldCheck, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Hero3DScene from '../components/Hero3DScene';
 
 export default function Home() {
+  const particles = useMemo(() => {
+    return [...Array(20)].map(() => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      targetY: Math.random() * -500,
+      duration: Math.random() * 5 + 5
+    }));
+  }, []);
+
   return (
     <div className="flex flex-col gap-16 pb-16">
       {/* Hero Section */}
@@ -14,20 +24,20 @@ export default function Home() {
         
         {/* Animated Background Particles */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
+          {particles.map((p, i) => (
             <motion.div
               key={i}
               className="absolute w-2 h-2 bg-campus-400/20 rounded-full"
               initial={{
-                x: Math.random() * window.innerWidth,
-                y: Math.random() * window.innerHeight,
+                x: p.x,
+                y: p.y,
               }}
               animate={{
-                y: [null, Math.random() * -500],
+                y: [null, p.targetY],
                 opacity: [0, 1, 0],
               }}
               transition={{
-                duration: Math.random() * 5 + 5,
+                duration: p.duration,
                 repeat: Infinity,
                 ease: "linear",
               }}

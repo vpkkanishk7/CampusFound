@@ -230,3 +230,35 @@ export const createFoundItem = (req: AuthenticatedRequest, res: Response): void 
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const closeItem = (req: AuthenticatedRequest, res: Response): void => {
+  try {
+    const { type, id } = req.params;
+    const userId = req.user?.id;
+    
+    if (type !== 'lost' && type !== 'found') {
+      res.status(400).json({ success: false, message: 'Invalid item type' });
+      return;
+    }
+    
+    const table = type === 'lost' ? 'lost_items' : 'found_items';
+    const item = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as any;
+    
+    if (!item) {
+      res.status(404).json({ success: false, message: 'Item not found' });
+      return;
+    }
+    
+    // Check ownership
+    if (item.userId !== userId) {
+      res.status(403).json({ success: false, message: 'Not authorized to close this item' });
+      return;
+    }
+    
+    db.prepare(`UPDATE ${table} SET status = 'closed' WHERE id = ?`).run(id);
+    
+    res.json({ success: true, message: 'Item successfully marked as closed/returned.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

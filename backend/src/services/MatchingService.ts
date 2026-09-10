@@ -1,7 +1,6 @@
 import { db } from '../database/schema';
 import { CustomHashMap } from '../dataStructures/HashMap';
 import { CustomMaxHeap } from '../dataStructures/MaxHeap';
-import { StringMatcher } from '../algorithms/StringMatcher';
 import { MatchScoring, ScoreResult } from '../algorithms/MatchScoring';
 import { MergeSort } from '../algorithms/MergeSort';
 import { AIService } from './AIService';

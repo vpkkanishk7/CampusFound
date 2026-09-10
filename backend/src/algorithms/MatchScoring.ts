@@ -94,7 +94,7 @@ export class MatchScoring {
         score += 3;
         reasons.push('Occurred within 3 days');
       }
-    } catch (e) {
+    } catch {
       // Date parse fallback
     }
 

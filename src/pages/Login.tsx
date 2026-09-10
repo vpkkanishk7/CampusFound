@@ -137,7 +137,7 @@ export default function Login() {
           setStep(2);
           setInfoMessage(res.message || 'OTP generated. Please check server console or enter code.');
           setCooldown(60);
-        } catch (backendErr: any) {
+        } catch {
           setError('Invalid Firebase API key. Please update VITE_FIREBASE_API_KEY in your .env file with your real key from Firebase Console.');
         }
       } else if (err.code === 'auth/too-many-requests') {

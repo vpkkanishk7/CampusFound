@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getLostItems, getLostItemById, createLostItem, getFoundItems, getFoundItemById, createFoundItem } from '../controllers/itemController';
+import { getLostItems, getLostItemById, createLostItem, getFoundItems, getFoundItemById, createFoundItem, closeItem } from '../controllers/itemController';
 import { authenticateToken } from '../middleware/authMiddleware';
 import { upload } from '../middleware/uploadMiddleware';
 
@@ -14,5 +14,8 @@ router.post('/lost', authenticateToken, upload.single('image'), createLostItem);
 router.get('/found', authenticateToken, getFoundItems);
 router.get('/found/:id', authenticateToken, getFoundItemById);
 router.post('/found', authenticateToken, upload.single('image'), createFoundItem);
+
+// Close Item
+router.put('/:type/:id/close', authenticateToken, closeItem);
 
 export default router;

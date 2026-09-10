@@ -35,7 +35,7 @@ export default function AIChatbot() {
       const aiReplyText = await mockApi.askAiChatbot(userMsgText);
       const aiMsg: Message = { id: `ai-${Date.now()}`, sender: 'ai', text: aiReplyText };
       setMessages(prev => [...prev, aiMsg]);
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { id: `err-${Date.now()}`, sender: 'ai', text: 'Sorry, I encountered an issue. Please try again.' }]);
     } finally {
       setLoading(false);

@@ -34,6 +34,7 @@ export const explainMatch = async (req: AuthenticatedRequest, res: Response): Pr
       }
     });
   } catch (error: any) {
+    console.error('Match error:', error);
     res.json({
       success: true,
       data: {

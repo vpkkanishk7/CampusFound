@@ -6,7 +6,7 @@ const API_BASE_URL = 'http://localhost:5000/api';
 /**
  * Helper to execute HTTP requests with fallback to mockApi if backend is offline
  */
-async function fetchWithFallback<T>(url: string, options?: RequestInit, fallbackFn?: () => Promise<T>): Promise<T> {
+async function fetchWithFallback<T>(url: string, options?: RequestInit, _fallbackFn?: () => Promise<T>): Promise<T> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {})
@@ -153,10 +153,10 @@ export const api = {
   },
 
   // --- CLAIMS & CONTACT ---
-  async submitClaim(matchId: string, lostItemId: string, submittedDetail: string): Promise<{ success: boolean; verified: boolean; message: string }> {
+  async submitClaim(matchId: string, lostItemId: string, submittedDetail: string, foundItemId?: string): Promise<{ success: boolean; verified: boolean; message: string }> {
     return fetchWithFallback(
       `${API_BASE_URL}/claims`,
-      { method: 'POST', body: JSON.stringify({ matchId, lostItemId, submittedDetail }) },
+      { method: 'POST', body: JSON.stringify({ matchId, lostItemId, foundItemId, submittedDetail }) },
       async () => ({ success: true, verified: true, message: 'Verified via backend!' })
     );
   },
@@ -166,6 +166,22 @@ export const api = {
       `${API_BASE_URL}/contact-requests`,
       { method: 'POST', body: JSON.stringify({ matchId, finderId }) },
       async () => ({ success: true, message: 'Contact request sent to finder.' })
+    );
+  },
+
+  async approveContactRequest(requestId: string): Promise<{ success: boolean; status: string; message?: string; contactInfo?: any }> {
+    return fetchWithFallback(
+      `${API_BASE_URL}/contact-requests/${requestId}/approve`,
+      { method: 'PUT' },
+      async () => ({ success: true, status: 'approved' })
+    );
+  },
+
+  async closeItem(type: 'lost' | 'found', id: string): Promise<{ success: boolean; message: string }> {
+    return fetchWithFallback(
+      `${API_BASE_URL}/${type}/${id}/close`,
+      { method: 'PUT' },
+      async () => ({ success: true, message: 'Closed' })
     );
   },
 

@@ -10,22 +10,33 @@ const claimQueue = new CustomQueue<any>();
 export const submitClaim = (req: AuthenticatedRequest, res: Response): void => {
   try {
     const claimantId = req.user?.id || 'u-1';
-    const { matchId, lostItemId, submittedDetail } = req.body;
+    const { matchId, lostItemId, foundItemId, submittedDetail } = req.body;
 
     if (!submittedDetail) {
       res.status(400).json({ success: false, message: 'Private verification detail is required.' });
       return;
     }
 
-    // Find lost item private verification detail from DB
-    const lostItem = db.prepare('SELECT * FROM lost_items WHERE id = ?').get(lostItemId) as any;
     let verified = false;
 
-    if (lostItem && lostItem.privateVerificationDetail) {
-      const similarity = StringMatcher.calculateSimilarity(submittedDetail, lostItem.privateVerificationDetail);
-      verified = similarity >= 0.4 || lostItem.privateVerificationDetail.toLowerCase().includes(submittedDetail.toLowerCase());
-    } else {
-      verified = true; // Fallback verification
+    if (foundItemId) {
+      // Direct claim on a found item
+      const foundItem = db.prepare('SELECT * FROM found_items WHERE id = ?').get(foundItemId) as any;
+      if (foundItem && foundItem.privateFinderNote) {
+        const similarity = StringMatcher.calculateSimilarity(submittedDetail, foundItem.privateFinderNote);
+        verified = similarity >= 0.4 || foundItem.privateFinderNote.toLowerCase().includes(submittedDetail.toLowerCase()) || submittedDetail.toLowerCase().includes(foundItem.privateFinderNote.toLowerCase());
+      } else {
+        verified = true; // Fallback if no private note exists
+      }
+    } else if (lostItemId) {
+      // Match-based claim using lost item details
+      const lostItem = db.prepare('SELECT * FROM lost_items WHERE id = ?').get(lostItemId) as any;
+      if (lostItem && lostItem.privateVerificationDetail) {
+        const similarity = StringMatcher.calculateSimilarity(submittedDetail, lostItem.privateVerificationDetail);
+        verified = similarity >= 0.4 || lostItem.privateVerificationDetail.toLowerCase().includes(submittedDetail.toLowerCase());
+      } else {
+        verified = true; // Fallback verification
+      }
     }
 
     const claimId = `claim-${Date.now()}`;
@@ -34,7 +45,7 @@ export const submitClaim = (req: AuthenticatedRequest, res: Response): void => {
     db.prepare(`
       INSERT INTO claims (id, matchId, claimantId, submittedDetail, verificationStatus, createdAt)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(claimId, matchId || `m-${lostItemId}`, claimantId, submittedDetail, verified ? 'verified' : 'rejected', createdAt);
+    `).run(claimId, matchId || `m-${lostItemId || foundItemId}`, claimantId, submittedDetail, verified ? 'verified' : 'rejected', createdAt);
 
     // Enqueue claim request into FIFO Queue
     claimQueue.enqueue({ claimId, claimantId, verified, createdAt });
