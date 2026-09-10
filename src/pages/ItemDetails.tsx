@@ -150,16 +150,7 @@ export default function ItemDetails() {
             </div>
           </div>
 
-          {/* Owner View (User created this post) */}
-          {user && item.userId === user.id ? (
-            <div className="bg-campus-50 border border-campus-200 rounded-xl p-6 space-y-4">
-              <h3 className="font-semibold text-campus-900 text-lg flex items-center justify-between">
-                <span className="flex items-center gap-2"><ShieldAlert className="w-5 h-5" /> Manage This Item</span>
-                {item.status !== 'closed' && (
-                  <button onClick={handleCloseItem} className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-full hover:bg-slate-800 transition">
-                    Mark as Returned
-                  </button>
-                )}
+
           {/* Owner View (User created this post) */}
           {user && item.userId === user.id ? (
             <div className="bg-campus-50 border border-campus-200 rounded-xl p-6 space-y-4">
