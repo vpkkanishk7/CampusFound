@@ -91,7 +91,7 @@ export const requestContact = (req: AuthenticatedRequest, res: Response): void =
 export const approveContactRequest = (req: AuthenticatedRequest, res: Response): void => {
   try {
     const { id } = req.params;
-    db.prepare('UPDATE contact_requests SET status = "approved" WHERE id = ?').run(id);
+    db.prepare("UPDATE contact_requests SET status = 'approved' WHERE id = ?").run(id);
 
     const request = db.prepare('SELECT * FROM contact_requests WHERE id = ?').get(id) as any;
     if (request) {

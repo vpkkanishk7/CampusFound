@@ -5,6 +5,16 @@ import { Search, MapPin, Calendar, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Item } from '../types';
 
+const ALL_CATEGORIES = [
+  'Electronics', 'ID Cards', 'Books', 'Stationery',
+  'Accessories', 'Wallet / Money', 'Keys', 'Clothing', 'Documents', 'Other'
+];
+
+const ALL_LOCATIONS = [
+  'Library', 'Canteen', 'Classroom', 'Lab',
+  'Hostel', 'Auditorium', 'Sports Ground', 'Parking Area', 'Bus Area', 'Other'
+];
+
 export default function LostItems() {
   const [items, setItems] = useState<Item[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,6 +29,18 @@ export default function LostItems() {
     });
   }, []);
 
+  // Only show active items on the public board — resolved items are archived
+  const visibleItems = items.filter(item => item.status !== 'resolved');
+
+  const filtered = visibleItems.filter(item => {
+    const matchesSearch =
+      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCat = selectedCategory ? item.category === selectedCategory : true;
+    const matchesLoc = selectedLocation ? item.location === selectedLocation : true;
+    return matchesSearch && matchesCat && matchesLoc;
+  });
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -30,7 +52,10 @@ export default function LostItems() {
       >
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Missing Registry</h1>
-          <p className="text-slate-500 mt-1">Browse all reported missing items across campus.</p>
+          <p className="text-slate-500 mt-1">
+            Browse all reported missing items across campus.{' '}
+            <span className="text-campus-600 font-medium">{visibleItems.length} active reports</span>
+          </p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -51,11 +76,7 @@ export default function LostItems() {
             onChange={e => setSelectedCategory(e.target.value)}
           >
             <option value="">All Categories</option>
-            <option value="Electronics">Electronics</option>
-            <option value="ID Cards">ID Cards</option>
-            <option value="Books">Books</option>
-            <option value="Accessories">Accessories</option>
-            <option value="Keys">Keys</option>
+            {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
           <select
@@ -64,32 +85,22 @@ export default function LostItems() {
             onChange={e => setSelectedLocation(e.target.value)}
           >
             <option value="">All Locations</option>
-            <option value="Library">Library</option>
-            <option value="Canteen">Canteen</option>
-            <option value="Classroom">Classroom</option>
-            <option value="Hostel">Hostel</option>
+            {ALL_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
       </motion.div>
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-campus-600" /></div>
-      ) : items.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-xl border border-slate-200">
           <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h3 className="text-lg font-medium text-slate-900">No lost items found</h3>
-          <p className="text-slate-500">Try changing your search or check back later.</p>
+          <p className="text-slate-500">Try changing your filters or check back later.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {items
-            .filter(item => {
-              const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || item.location.toLowerCase().includes(searchTerm.toLowerCase());
-              const matchesCat = selectedCategory ? item.category === selectedCategory : true;
-              const matchesLoc = selectedLocation ? item.location === selectedLocation : true;
-              return matchesSearch && matchesCat && matchesLoc;
-            })
-            .map((item, i) => (
+          {filtered.map((item, i) => (
             <motion.div 
               key={item.id}
               initial={{ opacity: 0, y: 30 }}
@@ -101,11 +112,25 @@ export default function LostItems() {
             >
               <div className="h-48 bg-slate-100 flex items-center justify-center border-b border-slate-100 relative overflow-hidden">
                 {item.imageUrl ? (
-                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img
+                    src={item.imageUrl.startsWith('/uploads') ? `http://localhost:5000${item.imageUrl}` : item.imageUrl}
+                    alt={item.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
                 ) : (
                   <span className="text-slate-400 font-medium">No Image</span>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                {/* Status chip */}
+                <div className="absolute top-3 right-3">
+                  <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full shadow ${
+                    item.status === 'matched' ? 'bg-purple-600 text-white' :
+                    item.status === 'claimed' ? 'bg-amber-500 text-white' :
+                    'bg-slate-900/70 text-white'
+                  }`}>
+                    {item.status === 'active' ? 'Missing' : item.status}
+                  </span>
+                </div>
               </div>
               <div className="p-5 flex-1 flex flex-col">
                 <div className="flex justify-between items-start mb-2">

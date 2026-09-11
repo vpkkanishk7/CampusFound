@@ -26,8 +26,9 @@ export default function CreateLost() {
     
     setLoading(true);
     try {
-      await api.createLostItem(formData, imageFile || undefined);
-      navigate('/dashboard');
+      // Attach userId so the item is properly owned
+      await api.createLostItem({ ...formData, userId: user.id }, imageFile || undefined);
+      navigate('/my-reports');
     } catch (error) {
       console.error(error);
     } finally {

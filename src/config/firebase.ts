@@ -1,23 +1,22 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
-// Firebase configuration read securely from environment variables
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDemoPlaceholderKeyForCampusFind",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "campus-find.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "campus-find",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "campus-find.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789012",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789012:web:abcdef1234567890"
+  apiKey: "AIzaSyC3bsEP45F73tzRgshZN3GIX5oYoPgYxoE",
+  authDomain: "campus-find-81a11.firebaseapp.com",
+  projectId: "campus-find-81a11",
+  storageBucket: "campus-find-81a11.firebasestorage.app",
+  messagingSenderId: "511506597888",
+  appId: "1:511506597888:web:08aed5b4feaaa2542bf0e5",
+  measurementId: "G-W3B3XGCTY0"
 };
 
-// Initialize Firebase App
+// Initialise Firebase (guard against HMR double-init)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firebase Authentication
+// Auth — used for Phone OTP sign-in
 export const auth = getAuth(app);
-
-// Language code (e.g. 'en' for English)
 auth.languageCode = 'en';
 
 export default app;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAppContext } from '../context/AppContext';
-import { MapPin, Calendar, Loader2, ArrowLeft, ShieldAlert, CheckCircle, Cpu, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { MapPin, Calendar, Loader2, ArrowLeft, ShieldAlert, CheckCircle, Cpu, ChevronDown, ChevronUp, Lock, Phone, Mail } from 'lucide-react';
 import type { Item } from '../types';
 
 export default function ItemDetails() {
@@ -14,56 +14,78 @@ export default function ItemDetails() {
   const [claimApproved, setClaimApproved] = useState(false);
   const [dsaMetrics, setDsaMetrics] = useState<any>(null);
   const [showDsaPanel, setShowDsaPanel] = useState(false);
+  const [contactInfo, setContactInfo] = useState<string | null>(null);
 
   // Claim State
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [claimDetail, setClaimDetail] = useState('');
   const [claimResult, setClaimResult] = useState<{success: boolean, message: string} | null>(null);
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
 
   useEffect(() => {
     if (id) {
+      // api.getItem now correctly tries /lost/:id then /found/:id
       api.getItem(id).then(data => {
         setItem(data || null);
         setLoading(false);
-      });
-      api.getDsaExplanation(id).then(exp => {
-        setDsaMetrics(exp);
-      });
+        
+        // Only run DSA explanation pipeline for Lost Items
+        if (data && data.type === 'lost') {
+          api.getDsaExplanation(id).then(exp => {
+            setDsaMetrics(exp);
+          }).catch(() => {});
+        }
+      }).catch(() => setLoading(false));
     }
   }, [id]);
 
   const handleClaimSubmit = async () => {
-    if (!claimDetail || !id) return;
+    if (!claimDetail.trim() || !id) return;
+    setClaimSubmitting(true);
     try {
       let submitFoundItemId = id;
       let submitLostItemId = '';
       
-      // If we are claiming from our own lost item page, we are claiming the top match
       if (item?.type === 'lost' && dsaMetrics?.matches?.[0]) {
         submitFoundItemId = dsaMetrics.matches[0].foundItemId;
         submitLostItemId = id;
+      } else if (item?.type === 'found') {
+        submitFoundItemId = id;
       }
       
-      const res = await api.submitClaim('', submitLostItemId, claimDetail, submitFoundItemId);
+      const res = await api.submitClaim('m-1', submitLostItemId, claimDetail, submitFoundItemId);
       setClaimResult({ success: res.verified, message: res.message });
+
       if (res.verified && item) {
-        // Request contact if verified
-        const targetUserId = item.type === 'lost' ? dsaMetrics?.matches?.[0]?.foundItem?.userId : item.userId;
+        // Notify the item owner that someone has submitted a verified claim
+        const targetUserId = item.type === 'lost'
+          ? dsaMetrics?.matches?.[0]?.foundItem?.userId
+          : item.userId;
         if (targetUserId) {
-           await api.requestContact(`m-${id}`, targetUserId);
+          await api.requestContact(`m-${id}`, targetUserId);
         }
       }
     } catch (err: any) {
-      setClaimResult({ success: false, message: err.message });
+      setClaimResult({ success: false, message: err.message || 'Verification failed. Please try again.' });
+    } finally {
+      setClaimSubmitting(false);
     }
   };
 
   const handleApproveContact = async () => {
+    if (!item) return;
     try {
-      // Dummy request ID for demonstration, in real app this comes from notifications
-      const res = await api.approveContactRequest(`req-${Date.now()}`);
+      // Use a stable match ID derived from the item, not a random timestamp
+      const matchId = `m-${item.id}`;
+      const res = await api.approveContactRequest(matchId);
       if (res.success) {
         setClaimApproved(true);
+        // Show the contact info to the claimant
+        setContactInfo(
+          item.type === 'found'
+            ? `Contact the finder via their preferred method. Phone: ${user?.phone || 'See profile'}`
+            : `The claimant's contact has been shared with the finder.`
+        );
       }
     } catch (err) {
       console.error(err);
@@ -75,7 +97,8 @@ export default function ItemDetails() {
     try {
       const res = await api.closeItem(item.type, id);
       if (res.success) {
-        setItem({ ...item, status: 'closed' });
+        // Update local state to reflect resolved status
+        setItem({ ...item, status: 'resolved' });
       }
     } catch (err) {
       console.error(err);
@@ -85,20 +108,28 @@ export default function ItemDetails() {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-campus-600" /></div>;
   if (!item) return <div className="text-center py-20 text-slate-500">Item not found.</div>;
 
+  const isOwner = user && item.userId === user.id;
+  const isResolved = item.status === 'resolved';
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <button onClick={() => navigate(-1)} className="text-sm font-medium text-slate-500 hover:text-slate-900 flex items-center gap-2 mb-4">
         <ArrowLeft className="w-4 h-4" /> Back to board
       </button>
 
-      {item.status === 'closed' && (
+      {/* Resolved Banner */}
+      {isResolved && (
         <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl flex items-center gap-3 shadow-sm border border-emerald-100">
           <CheckCircle className="w-5 h-5 shrink-0" />
-          <div className="font-medium">This item has been successfully resolved and returned!</div>
+          <div>
+            <div className="font-semibold">Item Successfully Returned!</div>
+            <div className="text-sm text-emerald-700">This item has been marked as returned and the case is now closed.</div>
+          </div>
         </div>
       )}
 
-      <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${item.status === 'closed' ? 'opacity-75' : ''}`}>
+      <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${isResolved ? 'opacity-75' : ''}`}>
+        {/* Image */}
         <div className="h-64 bg-slate-100 flex items-center justify-center border-b border-slate-200 overflow-hidden relative">
           {item.imageUrl ? (
             <img 
@@ -112,9 +143,9 @@ export default function ItemDetails() {
           ) : (
             <span className="text-slate-400 font-medium">No Image Uploaded</span>
           )}
-          {item.status === 'closed' && (
+          {isResolved && (
             <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] flex items-center justify-center">
-              <span className="bg-slate-900 text-white px-6 py-2 rounded-full font-bold text-lg shadow-lg">CLOSED</span>
+              <span className="bg-emerald-700 text-white px-6 py-2 rounded-full font-bold text-lg shadow-lg">✓ RETURNED</span>
             </div>
           )}
         </div>
@@ -126,6 +157,15 @@ export default function ItemDetails() {
                 {item.type}
               </span>
               <span className="text-slate-400 font-mono text-sm">{item.id}</span>
+              {/* Status Badge */}
+              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                isResolved ? 'bg-emerald-100 text-emerald-700' :
+                item.status === 'matched' ? 'bg-purple-100 text-purple-700' :
+                item.status === 'claimed' ? 'bg-blue-100 text-blue-700' :
+                'bg-slate-100 text-slate-600'
+              }`}>
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              </span>
             </div>
             <h1 className="text-3xl font-bold text-slate-900 mb-4">{item.title}</h1>
             <p className="text-slate-700 whitespace-pre-wrap">{item.description}</p>
@@ -151,118 +191,144 @@ export default function ItemDetails() {
           </div>
 
 
-          {/* Owner View (User created this post) */}
-          {user && item.userId === user.id ? (
+          {/* ── OWNER VIEW ── */}
+          {isOwner ? (
             <div className="bg-campus-50 border border-campus-200 rounded-xl p-6 space-y-4">
               <h3 className="font-semibold text-campus-900 text-lg flex items-center justify-between">
                 <span className="flex items-center gap-2"><ShieldAlert className="w-5 h-5" /> Manage This Item</span>
-                {item.status !== 'closed' && (
-                  <button onClick={handleCloseItem} className="text-sm bg-slate-900 text-white px-4 py-1.5 rounded-full hover:bg-slate-800 transition">
-                    Mark as Returned
+                {/* Only show "Mark as Returned" when item is still active */}
+                {!isResolved && (
+                  <button
+                    onClick={handleCloseItem}
+                    className="text-sm bg-emerald-700 text-white px-4 py-1.5 rounded-full hover:bg-emerald-800 transition"
+                  >
+                    ✓ Mark as Returned
                   </button>
                 )}
               </h3>
-              
-              {item.status !== 'closed' && (
-                claimApproved ? (
-                  <div className="bg-emerald-50 text-emerald-800 p-4 rounded-lg flex items-start gap-3">
+
+              {isResolved ? (
+                /* ── Resolved state — case closed ── */
+                <div className="bg-emerald-50 text-emerald-800 p-4 rounded-lg flex items-start gap-3 border border-emerald-100">
+                  <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold">Case Closed</h4>
+                    <p className="text-sm mt-1">You have marked this item as returned. The case is now resolved and archived.</p>
+                  </div>
+                </div>
+              ) : claimApproved ? (
+                /* ── Claim approved, contact shared ── */
+                <div className="space-y-3">
+                  <div className="bg-emerald-50 text-emerald-800 p-4 rounded-lg flex items-start gap-3 border border-emerald-100">
                     <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="font-semibold">Match Approved!</h4>
-                      <p className="text-sm mt-1">You have confirmed the match. Contact details have been shared.</p>
+                      <p className="text-sm mt-1">You have confirmed the match. Contact details have been shared with the claimant.</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                    {item.type === 'lost' ? (
-                      // LOST ITEM OWNER VIEW (Claimant)
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl">🎯</span>
-                            <h4 className="font-bold text-slate-900 text-lg">System Found a Match!</h4>
-                          </div>
-                          <span className="text-sm bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold tracking-wide">
-                            {dsaMetrics?.finalScore || 91}% Match
-                          </span>
+                  {contactInfo && (
+                    <div className="bg-white p-4 rounded-lg border border-slate-200 text-sm text-slate-700">
+                      <div className="flex items-center gap-2 mb-1"><Phone className="w-4 h-4 text-campus-600" />{contactInfo}</div>
+                    </div>
+                  )}
+                  <p className="text-sm text-slate-500">Once you've exchanged the item, click <strong>Mark as Returned</strong> above to close this case.</p>
+                </div>
+              ) : (
+                /* ── Active management panel ── */
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  {item.type === 'lost' ? (
+                    // LOST ITEM OWNER VIEW — system shows matched found item
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">🎯</span>
+                          <h4 className="font-bold text-slate-900 text-lg">System Found a Match!</h4>
                         </div>
+                        <span className="text-sm bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold tracking-wide">
+                          {dsaMetrics?.finalScore || 91}% Match
+                        </span>
+                      </div>
 
-                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm">
-                          <div>
-                            <span className="text-slate-500 text-xs block">DSA Score</span>
-                            <span className="font-bold text-campus-700 text-base">{dsaMetrics?.dsaScore || 92}%</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 text-xs block">AI Similarity</span>
-                            <span className="font-bold text-purple-700 text-base">{dsaMetrics?.aiScore || 89}%</span>
-                          </div>
+                      <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm">
+                        <div>
+                          <span className="text-slate-500 text-xs block">DSA Score</span>
+                          <span className="font-bold text-campus-700 text-base">{dsaMetrics?.dsaScore || 92}%</span>
                         </div>
-
-                        {!showClaimForm && !claimResult && (
-                          <div className="flex gap-3 pt-2">
-                            <button onClick={() => setShowClaimForm(true)} className="btn-primary text-sm w-full">
-                              Claim this Matched Item
-                            </button>
-                          </div>
-                        )}
-
-                        {showClaimForm && !claimResult && (
-                          <div className="mt-4 space-y-3">
-                            <label className="block text-sm font-medium text-slate-700">
-                              Verify Ownership (Enter specific detail about the item):
-                            </label>
-                            <textarea 
-                              value={claimDetail}
-                              onChange={(e) => setClaimDetail(e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-campus-500 outline-none resize-none"
-                              rows={2}
-                            />
-                            <div className="flex gap-2">
-                              <button onClick={handleClaimSubmit} className="btn-primary flex-1 text-sm">Submit Verification</button>
-                              <button onClick={() => setShowClaimForm(false)} className="btn-secondary text-sm">Cancel</button>
-                            </div>
-                          </div>
-                        )}
-
-                        {claimResult && (
-                          <div className={`p-4 rounded-lg flex items-start gap-3 mt-4 border ${claimResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-red-50 text-red-800 border-red-100'}`}>
-                            {claimResult.success ? <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" /> : <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />}
-                            <div>
-                              <h4 className="font-semibold">{claimResult.success ? 'Verification Successful!' : 'Verification Failed'}</h4>
-                              <p className="text-sm mt-1">{claimResult.success ? 'A contact request has been sent to the finder.' : claimResult.message}</p>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      // FOUND ITEM OWNER VIEW (Finder)
-                      <>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xl">📩</span>
-                          <h4 className="font-bold text-slate-900 text-lg">Pending Claim Request</h4>
+                        <div>
+                          <span className="text-slate-500 text-xs block">AI Similarity</span>
+                          <span className="font-bold text-purple-700 text-base">{dsaMetrics?.aiScore || 89}%</span>
                         </div>
-                        <p className="text-sm text-slate-600 mb-4">A student has submitted a verification claim for this item. They provided details matching your private notes.</p>
-                        
+                      </div>
+
+                      {!showClaimForm && !claimResult && (
                         <div className="flex gap-3 pt-2">
-                          <button onClick={handleApproveContact} className="btn-primary text-sm w-full">
-                            Approve Claim & Reveal My Contact Info
+                          <button onClick={() => setShowClaimForm(true)} className="btn-primary text-sm w-full">
+                            Claim this Matched Item
                           </button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                )
+                      )}
+
+                      {showClaimForm && !claimResult && (
+                        <div className="mt-4 space-y-3">
+                          <label className="block text-sm font-medium text-slate-700">
+                            Verify Ownership (Enter a specific private detail about the item):
+                          </label>
+                          <textarea 
+                            value={claimDetail}
+                            onChange={(e) => setClaimDetail(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-campus-500 outline-none resize-none"
+                            rows={2}
+                            placeholder="e.g. Has a small scratch on the bottom right corner..."
+                          />
+                          <div className="flex gap-2">
+                            <button onClick={handleClaimSubmit} disabled={claimSubmitting} className="btn-primary flex-1 text-sm">
+                              {claimSubmitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Verification'}
+                            </button>
+                            <button onClick={() => setShowClaimForm(false)} className="btn-secondary text-sm">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {claimResult && (
+                        <div className={`p-4 rounded-lg flex items-start gap-3 mt-4 border ${claimResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-red-50 text-red-800 border-red-100'}`}>
+                          {claimResult.success ? <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" /> : <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />}
+                          <div>
+                            <h4 className="font-semibold">{claimResult.success ? 'Verification Successful!' : 'Verification Failed'}</h4>
+                            <p className="text-sm mt-1">{claimResult.message}</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    // FOUND ITEM OWNER VIEW — someone has claimed this item
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">📩</span>
+                        <h4 className="font-bold text-slate-900 text-lg">Pending Claim Request</h4>
+                      </div>
+                      <p className="text-sm text-slate-600 mb-4">
+                        A student has submitted a verification claim for this item. They provided details that have been checked against your private notes.
+                      </p>
+                      
+                      <div className="flex gap-3 pt-2">
+                        <button onClick={handleApproveContact} className="btn-primary text-sm w-full">
+                          Approve Claim &amp; Share My Contact Info
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           ) : (
-            /* Visitor View (Not the owner) */
+            /* ── VISITOR VIEW (not the owner) ── */
             <>
-              {item.type === 'found' && item.status !== 'closed' && (
+              {item.type === 'found' && !isResolved && (
                 <div className="bg-slate-50 rounded-xl p-6 space-y-4">
                   <div className="text-center">
                     <h3 className="font-semibold text-slate-900 text-lg">Think this item belongs to you?</h3>
                     <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
-                      You will need to provide private verification details to prove ownership before the finder's contact info is shared.
+                      You will need to provide a private verification detail to prove ownership. Only then will the finder's contact info be shared.
                     </p>
                     
                     {!showClaimForm && !claimResult && (
@@ -283,7 +349,9 @@ export default function ItemDetails() {
                         placeholder="It has a small scratch on the bottom right corner..."
                       />
                       <div className="flex gap-2">
-                        <button onClick={handleClaimSubmit} className="btn-primary flex-1 text-sm">Submit Claim for Verification</button>
+                        <button onClick={handleClaimSubmit} disabled={claimSubmitting} className="btn-primary flex-1 text-sm">
+                          {claimSubmitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Claim for Verification'}
+                        </button>
                         <button onClick={() => setShowClaimForm(false)} className="btn-secondary text-sm">Cancel</button>
                       </div>
                     </div>
@@ -295,29 +363,63 @@ export default function ItemDetails() {
                       <div>
                         <h4 className="font-semibold">{claimResult.success ? 'Claim Verified!' : 'Verification Failed'}</h4>
                         <p className="text-sm mt-1">{claimResult.message}</p>
+                        {claimResult.success && (
+                          <p className="text-sm mt-2 font-medium">
+                            A notification has been sent to the finder. They will share their contact info after review.
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {item.type === 'lost' && item.status !== 'closed' && (
+              {item.type === 'lost' && !isResolved && (
                 <div className="bg-campus-50 rounded-xl p-6 text-center space-y-4">
                   <h3 className="font-semibold text-campus-900 text-lg">Did you find this item?</h3>
-                  <button onClick={() => navigate('/create-found')} className="btn-primary w-full sm:w-auto">Report This As Found</button>
+                  <p className="text-sm text-campus-700">Report it as found so the system can match it with this post.</p>
+                  <button onClick={() => navigate('/create-found')} className="btn-primary w-full sm:w-auto">
+                    Report This As Found
+                  </button>
+                </div>
+              )}
+
+              {isResolved && (
+                <div className="bg-slate-100 rounded-xl p-6 text-center text-slate-500">
+                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                  <p className="font-medium text-slate-700">This item has already been returned to its owner.</p>
                 </div>
               )}
             </>
           )}
           
+          {/* Contact Info (shown after approval) */}
+          {claimApproved && !isOwner && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+              <h4 className="font-semibold text-emerald-900 flex items-center gap-2">
+                <Phone className="w-4 h-4" /> Contact Information Unlocked
+              </h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-emerald-800">
+                  <Phone className="w-4 h-4" />
+                  <span>Contact the finder through the in-app messaging system.</span>
+                </div>
+                <div className="flex items-center gap-2 text-emerald-800">
+                  <Mail className="w-4 h-4" />
+                  <span>Check your messages tab for finder's contact details.</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-start gap-3 text-sm text-slate-500 mt-6 pt-6 border-t border-slate-100">
             <Lock className="w-5 h-5 shrink-0" />
-            <p>For privacy and security, contact information is never displayed publicly. All claims undergo verification.</p>
+            <p>For privacy and security, contact information is never displayed publicly. All claims undergo verification before contact details are shared.</p>
           </div>
         </div>
       </div>
 
-      {/* DSA Pipeline Explanation Panel for Faculty Demo */}
+      {/* DSA Pipeline Explanation Panel */}
       {dsaMetrics && (
         <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-xl border border-slate-800 mb-8">
           <button 
@@ -330,7 +432,7 @@ export default function ItemDetails() {
               </div>
               <div>
                 <h3 className="font-bold text-base text-white">How CampusFind Matched This Item</h3>
-                <p className="text-xs text-slate-400">Live Data Structures & Algorithms Execution Metrics</p>
+                <p className="text-xs text-slate-400">Live Data Structures &amp; Algorithms Execution Metrics</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">

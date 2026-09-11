@@ -5,9 +5,11 @@ import { MatchingService } from '../services/MatchingService';
 export const getMatchesForLostItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { lostItemId } = req.params;
+    console.log(`\n[MatchController] 🔎 Running matching pipeline for lostItemId="${lostItemId}"...`);
     const explanation = await MatchingService.runMatchingPipeline(lostItemId);
     res.json({ success: true, data: explanation.matches });
   } catch (error: any) {
+    console.error('[MatchController] Error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -15,7 +17,16 @@ export const getMatchesForLostItem = async (req: AuthenticatedRequest, res: Resp
 export const explainMatch = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { lostItemId } = req.params;
+
+    console.log('\n╔══════════════════════════════════════════════════════════════════════╗');
+    console.log('║  CAMPUSFOUND — AI + DSA MATCH EXPLANATION (MENTOR MODE)             ║');
+    console.log('╚══════════════════════════════════════════════════════════════════════╝');
+    console.log(`  Lost Item ID: ${lostItemId}`);
+    console.log(`  Time        : ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
+    console.log('  Running full pipeline...\n');
+
     const explanation = await MatchingService.runMatchingPipeline(lostItemId);
+
     res.json({
       success: true,
       data: {
@@ -34,43 +45,8 @@ export const explainMatch = async (req: AuthenticatedRequest, res: Response): Pr
       }
     });
   } catch (error: any) {
-    console.error('Match error:', error);
-    res.json({
-      success: true,
-      data: {
-        lostItem: "Black Casio Calculator",
-        candidateCountBeforeHashMap: 120,
-        candidateCountAfterHashMap: 8,
-        dsaScore: 92,
-        aiScore: 89,
-        finalScore: 91,
-        stringSimilarity: 0.89,
-        matchScore: 91,
-        heapRank: 1,
-        reasons: [
-          "✓ Same category",
-          "✓ Same location",
-          "✓ Similar description",
-          "✓ AI detected semantic similarity"
-        ],
-        algorithmSteps: [
-          "Custom HashMap candidate indexing by Category + Location",
-          "Jaccard tokenized string similarity calculation",
-          "7-Attribute weighted DSA match scoring (70% weight)",
-          "AI semantic similarity calculation (30% weight)",
-          "Custom MaxHeap insertion and O(log N) extraction",
-          "Custom MergeSort final rank ordering"
-        ],
-        topMatches: [
-          {
-            foundItemId: "F-101",
-            dsaScore: 92,
-            aiScore: 89,
-            finalScore: 91,
-            reasons: ["✓ Same category", "✓ Same location", "✓ Similar description", "✓ AI detected semantic similarity"]
-          }
-        ]
-      }
-    });
+    console.error('[MatchController] Pipeline error:', error.message);
+    // Return real error so it's visible to mentor, not a fake hardcoded response
+    res.status(500).json({ success: false, message: `Matching pipeline failed: ${error.message}` });
   }
 };

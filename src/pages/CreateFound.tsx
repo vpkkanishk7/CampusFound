@@ -26,8 +26,9 @@ export default function CreateFound() {
     
     setLoading(true);
     try {
-      await api.createFoundItem(formData, imageFile || undefined);
-      navigate('/dashboard');
+      // Attach userId so the item is properly owned
+      await api.createFoundItem({ ...formData, userId: user.id }, imageFile || undefined);
+      navigate('/my-reports');
     } catch (error) {
       console.error(error);
     } finally {

@@ -1,6 +1,8 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
+
+const LS_KEY = 'campusfound_user';
 
 interface AppContextType {
   user: User | null;
@@ -11,7 +13,26 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  // Initialise from localStorage so the session survives page refresh
+  const [user, setUserState] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem(LS_KEY);
+      return stored ? (JSON.parse(stored) as User) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Keep localStorage in sync whenever user changes
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(LS_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(LS_KEY);
+    }
+  }, [user]);
+
+  const setUser = (u: User | null) => setUserState(u);
 
   return (
     <AppContext.Provider value={{ user, setUser, isAuthenticated: !!user }}>

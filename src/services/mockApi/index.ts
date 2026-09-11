@@ -1,4 +1,6 @@
 import type { Item, LostItem, FoundItem, User, Match, Notification, ChatConversation, ChatMessage } from '../../types';
+import { findBestMatch, runMatchingEngine } from '../matchingEngine';
+
 
 // Mock Data
 export const mockUser: User = {
@@ -56,8 +58,8 @@ let notifications: Notification[] = [
     id: 'n-1',
     userId: 'u-1',
     type: 'match',
-    title: 'Possible Match',
-    message: 'Your lost calculator has a possible match. Confidence: 94%',
+    title: 'Possible Match Found',
+    message: 'Your lost calculator has a possible match. Confidence: 94%. Tap to review.',
     isRead: false,
     createdAt: new Date().toISOString(),
     relatedItemId: 'LF-1024',
@@ -124,7 +126,7 @@ export const mockApi = {
   async sendOtp(phone: string): Promise<boolean> {
     await delay(1000);
     console.log(`Sending OTP to ${phone}`);
-    return true; // Simulate success
+    return true;
   },
 
   async verifyOtp(_phone: string, otp: string, userData?: Partial<User>): Promise<User> {
@@ -162,10 +164,135 @@ export const mockApi = {
     return newItem;
   },
 
+  async closeItem(_type: 'lost' | 'found', id: string): Promise<{ success: boolean; message: string }> {
+    await delay(600);
+    const idx = items.findIndex(i => i.id === id);
+    if (idx !== -1) {
+      items = items.map(i => i.id === id ? { ...i, status: 'resolved', updatedAt: new Date().toISOString() } : i);
+      return { success: true, message: 'Item marked as returned and resolved.' };
+    }
+    return { success: false, message: 'Item not found.' };
+  },
+
   async getMatches(_userId: string): Promise<Match[]> {
     await delay(600);
-    // In a real app, this would filter by items owned by userId
-    return matches;
+    // Build live matches from the real engine
+    const lostItems  = items.filter(i => i.type === 'lost');
+    const foundItems = items.filter(i => i.type === 'found');
+    const liveMatches: Match[] = [];
+
+    for (const lost of lostItems) {
+      const result = findBestMatch(lost, foundItems);
+      if (result) {
+        liveMatches.push({
+          id: `m-${lost.id}-${result.matchedItem.id}`,
+          lostItemId: lost.id,
+          foundItemId: result.matchedItem.id,
+          confidenceScore: result.finalScore,
+          status: 'pending',
+          reasons: result.reasons,
+        });
+      }
+    }
+    return liveMatches.length > 0 ? liveMatches : matches;
+  },
+
+  async getDsaExplanation(itemId: string): Promise<any> {
+    await delay(400);
+
+    const targetItem = items.find(i => i.id === itemId);
+    if (!targetItem) return null;
+
+    // Find candidates from the OPPOSITE pool
+    const pool = items.filter(i => i.type !== targetItem.type && i.status !== 'resolved');
+
+    if (pool.length === 0) return null;
+
+    const allResults = runMatchingEngine(targetItem, pool);
+    if (allResults.length === 0) return null;
+
+    const best = allResults[0];
+
+    // Surface notifications for meaningful matches
+    const existingNotif = notifications.find(
+      n => n.relatedItemId === itemId && n.type === 'match'
+    );
+    if (!existingNotif && best.hasMatch && targetItem.userId) {
+      notifications.push({
+        id: `n-match-${itemId}`,
+        userId: targetItem.userId,
+        type: 'match',
+        title: 'Possible Match Found',
+        message: `Your ${targetItem.type} item "${targetItem.title}" has a ${best.finalScore}% match. Tap to review.`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        relatedItemId: itemId,
+        relatedMatchId: best.matchedItem.id,
+      });
+    }
+
+    return {
+      // Matched item info
+      matchedItem: best.matchedItem,
+      queryItemTitle: targetItem.title,
+      matchedItemTitle: best.matchedItem.title,
+      matchedItemId: best.matchedItem.id,
+      matchedItemUserId: best.matchedItem.userId,
+      hasMatch: best.hasMatch,
+
+      // Scores
+      dsaScore: best.dsaScore,
+      aiScore: best.aiScore,
+      finalScore: best.finalScore,
+      matchScore: best.matchScore,
+
+      // Breakdown
+      categoryScore: best.categoryScore,
+      locationScore: best.locationScore,
+      titleScore: best.titleScore,
+      dateScore: best.dateScore,
+      descriptionScore: best.descriptionScore,
+      stringSimilarity: best.stringSimilarity,
+
+      // Pipeline metrics
+      candidateCountBeforeHashMap: best.candidateCountBeforeHashMap,
+      candidateCountAfterHashMap: best.candidateCountAfterHashMap,
+      heapRank: best.heapRank,
+      reasons: best.reasons,
+      algorithmSteps: best.algorithmSteps,
+
+      // All ranked matches (for future use)
+      allMatches: allResults.map(r => ({
+        foundItemId: r.matchedItem.id,
+        foundItem: r.matchedItem,
+        score: r.finalScore,
+      })),
+    };
+  },
+
+  async submitClaim(
+    _matchId: string,
+    _lostItemId: string,
+    _submittedDetail: string,
+    _foundItemId?: string
+  ): Promise<{ success: boolean; verified: boolean; message: string }> {
+    await delay(1000);
+    // Simulate a successful verification
+    return { success: true, verified: true, message: 'Ownership verified. Contact request has been sent to the finder.' };
+  },
+
+  async requestContact(_matchId: string, _finderId: string): Promise<{ success: boolean; message: string }> {
+    await delay(500);
+    return { success: true, message: 'Contact request sent to finder.' };
+  },
+
+  async approveContactRequest(requestId: string): Promise<{ success: boolean; status: string; message?: string; contactInfo?: any }> {
+    await delay(600);
+    // Update the relevant match status
+    matches = matches.map(m =>
+      m.id === requestId ? { ...m, status: 'contact_shared' as const } : m
+    );
+    return { success: true, status: 'approved', message: 'Contact info has been shared with the claimant.' };
   },
 
   async getNotifications(userId: string): Promise<Notification[]> {
