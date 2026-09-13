@@ -34,16 +34,23 @@ export default function MyReports() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getItems('lost'), api.getItems('found')]).then(([lost, found]) => {
-      const combined = [...lost, ...found];
-      // Only show items that belong to this user; do NOT fall back to showing all items
-      if (user?.id) {
-        setItems(combined.filter(item => item.userId === user.id));
-      } else {
+    Promise.all([api.getItems('lost'), api.getItems('found')])
+      .then(([lost, found]) => {
+        const safeLost = Array.isArray(lost) ? lost : [];
+        const safeFound = Array.isArray(found) ? found : [];
+        const combined = [...safeLost, ...safeFound];
+        // Only show items that belong to this user; do NOT fall back to showing all items
+        if (user?.id) {
+          setItems(combined.filter(item => item.userId === user.id));
+        } else {
+          setItems([]);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
         setItems([]);
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+      });
   }, [user]);
 
   return (

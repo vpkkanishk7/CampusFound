@@ -1,7 +1,7 @@
 import { mockApi } from './mockApi';
 import type { User, Item, Match, Notification } from '../types';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * Helper to execute HTTP requests with fallback to mockApi if backend is offline
@@ -46,19 +46,23 @@ async function fetchWithFallback<T>(url: string, options?: RequestInit, _fallbac
 
 export const api = {
   // --- AUTH ---
-  async login(phone: string): Promise<{ success: boolean; message: string }> {
+  async login(payload: { email?: string; phone?: string } | string): Promise<{ success: boolean; message: string; devOtp?: string }> {
+    const body = typeof payload === 'string' ? { phone: payload } : payload;
     return fetchWithFallback(
       `${API_BASE_URL}/auth/send-otp`,
-      { method: 'POST', body: JSON.stringify({ phone }) },
-      async () => ({ success: true, message: 'OTP sent (Development Mode)' })
+      { method: 'POST', body: JSON.stringify(body) },
+      async () => ({ success: true, message: 'OTP sent to your email (Development Mode)', devOtp: '654321' })
     );
   },
 
-  async verifyOtp(phone: string, otp: string, userData?: Partial<User>): Promise<User> {
+  async verifyOtp(identifier: { email?: string; phone?: string } | string, otp: string, userData?: Partial<User>): Promise<User> {
+    const payload = typeof identifier === 'string'
+      ? { phone: identifier, otp, ...userData }
+      : { ...identifier, otp, ...userData };
     const res = await fetchWithFallback<any>(
       `${API_BASE_URL}/auth/verify-otp`,
-      { method: 'POST', body: JSON.stringify({ phone, otp, ...userData }) },
-      async () => mockApi.verifyOtp(phone, otp, userData)
+      { method: 'POST', body: JSON.stringify(payload) },
+      async () => mockApi.verifyOtp(typeof identifier === 'string' ? identifier : identifier.phone || identifier.email || '', otp, userData)
     );
     if (res && res.token) {
       localStorage.setItem('token', res.token);

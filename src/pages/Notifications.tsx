@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { api } from '../services/api';
@@ -26,7 +27,7 @@ export default function Notifications() {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
   };
 
-  const typeStyles: Record<string, { icon: JSX.Element; bg: string }> = {
+  const typeStyles: Record<string, { icon: ReactNode; bg: string }> = {
     match: {
       icon: <CheckCircle className="w-5 h-5" />,
       bg: 'bg-emerald-100 text-emerald-600',

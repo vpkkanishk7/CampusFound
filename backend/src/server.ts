@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import { seedDatabase } from './database/seed';
 import { DB_PATH } from './database/schema';
@@ -44,6 +45,18 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Serve Frontend (Vite Production Build) with SPA routing fallback
+const frontendDistPath = path.resolve(__dirname, '../../dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
 
 // Global Error Handler (Handles Multer & Route Errors cleanly)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

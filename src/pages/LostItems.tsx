@@ -24,7 +24,10 @@ export default function LostItems() {
 
   useEffect(() => {
     api.getItems('lost').then(data => {
-      setItems(data);
+      setItems(Array.isArray(data) ? data : []);
+      setLoading(false);
+    }).catch(() => {
+      setItems([]);
       setLoading(false);
     });
   }, []);

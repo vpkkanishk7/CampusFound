@@ -98,7 +98,8 @@ export function initializeDatabase() {
 
     CREATE TABLE IF NOT EXISTS otp_verifications (
       id TEXT PRIMARY KEY,
-      phone TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
       otpHash TEXT NOT NULL,
       expiresAt INTEGER NOT NULL,
       attempts INTEGER DEFAULT 0,
@@ -107,14 +108,21 @@ export function initializeDatabase() {
     );
   `);
 
-  // Migration check: Ensure phoneVerified column exists on existing users table
+  // Migration checks
   try {
     const tableInfo = db.prepare("PRAGMA table_info(users)").all() as any[];
-    const hasPhoneVerified = tableInfo.some(col => col.name === 'phoneVerified');
-    if (!hasPhoneVerified) {
+    if (!tableInfo.some(col => col.name === 'phoneVerified')) {
       db.exec("ALTER TABLE users ADD COLUMN phoneVerified INTEGER DEFAULT 0");
     }
+    if (!tableInfo.some(col => col.name === 'emailVerified')) {
+      db.exec("ALTER TABLE users ADD COLUMN emailVerified INTEGER DEFAULT 0");
+    }
+
+    const otpTableInfo = db.prepare("PRAGMA table_info(otp_verifications)").all() as any[];
+    if (!otpTableInfo.some(col => col.name === 'email')) {
+      db.exec("ALTER TABLE otp_verifications ADD COLUMN email TEXT");
+    }
   } catch (err) {
-    console.error('Migration warning (phoneVerified):', err);
+    console.error('Migration warning:', err);
   }
 }
